@@ -1,5 +1,5 @@
 
-optiboot_atmega328_42400baud_20MHz.elf:     file format elf32-avr
+optiboot_atmega328_115200baud_16MHz.elf:     file format elf32-avr
 
 Sections:
 Idx Name          Size      VMA       LMA       File off  Algn
@@ -34,14 +34,14 @@ Disassembly of section .text:
     7e1c:	80 93 c1 00 	sts	0x00C1, r24	; 0x8000c1 <__TEXT_REGION_LENGTH__+0x7e00c1>
     7e20:	86 e0       	ldi	r24, 0x06	; 6
     7e22:	80 93 c2 00 	sts	0x00C2, r24	; 0x8000c2 <__TEXT_REGION_LENGTH__+0x7e00c2>
-    7e26:	8a e3       	ldi	r24, 0x3A	; 58
+    7e26:	80 e1       	ldi	r24, 0x10	; 16
     7e28:	80 93 c4 00 	sts	0x00C4, r24	; 0x8000c4 <__TEXT_REGION_LENGTH__+0x7e00c4>
     7e2c:	8e e0       	ldi	r24, 0x0E	; 14
     7e2e:	b3 d0       	rcall	.+358    	; 0x7f96 <watchdogConfig>
     7e30:	25 9a       	sbi	0x04, 5	; 4
     7e32:	86 e0       	ldi	r24, 0x06	; 6
-    7e34:	2c e3       	ldi	r18, 0x3C	; 60
-    7e36:	3b ef       	ldi	r19, 0xFB	; 251
+    7e34:	20 e3       	ldi	r18, 0x30	; 48
+    7e36:	3c ef       	ldi	r19, 0xFC	; 252
     7e38:	91 e0       	ldi	r25, 0x01	; 1
     7e3a:	30 93 85 00 	sts	0x0085, r19	; 0x800085 <__TEXT_REGION_LENGTH__+0x7e0085>
     7e3e:	20 93 84 00 	sts	0x0084, r18	; 0x800084 <__TEXT_REGION_LENGTH__+0x7e0084>
