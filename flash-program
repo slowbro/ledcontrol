@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# select the correct ttyUSB..
+ttycount=`ls /dev/ttyUSB* 2>/dev/null| wc -l`
+if [ $ttycount -gt 1 ];then
+    echo "Ambiguous ttyUSB - more than one device exists."
+    exit 1
+elif [ $ttycount -eq 0 ];then
+    echo "Missing ttyUSB!"
+    exit 1
+fi
+TTY=`ls /dev/ttyUSB*`
+
+if [ $# -ne 2 ];then
+    echo "usage: $0 <baud> <filename>"
+    exit 2
+fi
+
+BAUD=$1
+FILE=$2
+
+avr-size $FILE
+sleep 0.5
+avrdude -v -pm328p -carduino -P$TTY -b$BAUD -D -Uflash:w:$FILE:i

@@ -1,0 +1,3 @@
+[submodule "src/optiboot"]
+	path = src/optiboot
+	url = https://github.com/Optiboot/optiboot.git

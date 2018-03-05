@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if [ -z $1 ];then
+    echo "usage: $0 <file>"
+    exit 1
+fi
+
+avrdude -e -D -c usbasp -p m328p -Uflash:w:$1
