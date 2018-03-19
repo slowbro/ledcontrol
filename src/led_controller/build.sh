@@ -3,7 +3,7 @@
 mkdir -p tmp/{build,cache}
 WD=$PWD/${0%/*}
 
-/usr/share/arduino/arduino-builder \
+OUT=`/usr/share/arduino/arduino-builder \
     -compile -logger=machine -hardware /usr/share/arduino/hardware \
     -hardware /home/katelyn/.arduino15/packages -tools /usr/share/arduino/tools-builder \
     -tools /home/katelyn/.arduino15/packages -libraries /home/katelyn/Arduino/libraries \
@@ -12,12 +12,13 @@ WD=$PWD/${0%/*}
     -prefs=runtime.tools.arduinoOTA.path=/home/katelyn/.arduino15/packages/arduino/tools/arduinoOTA/1.1.1 \
     -prefs=runtime.tools.avrdude.path=/home/katelyn/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino9 \
     -prefs=runtime.tools.avr-gcc.path=/home/katelyn/.arduino15/packages/arduino/tools/avr-gcc/4.9.2-atmel3.5.4-arduino2 \
-    -verbose $WD/led_controller.ino \
-    | grep -v "^===info"
-
+    -verbose $WD/led_controller.ino`
+RET=$?
+echo "$OUT" | egrep -v '^===info'
 echo -e "\n==========================================\n"
 
-if [[ "$?" != "0" ]];then
+if [[ "$RET" != "0" ]];then
+
     echo "BUILD FAILED! Look above for why..."
     exit 1
 fi
