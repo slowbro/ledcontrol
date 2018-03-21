@@ -1,0 +1,1 @@
+:au BufWritePost * !./build.sh

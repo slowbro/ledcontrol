@@ -1,11 +1,11 @@
-#define EI_NOTEXTERNAL
+//vim: ts=4 sw=4 noexpandtab
+
 #define EI_NOTPORTC
 #define EI_NOTPORTD
 #include <EnableInterrupt.h>
 #include <FastLED.h>
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
-
 
 // io
 #define USB_DETECT 9  // atmega pin 15
@@ -27,6 +27,8 @@
 // LED helper
 #define LED_ORDER_LTOR 0
 #define LED_ORDER_RTOL 1
+#define LED_STRIPLEN_EVEN 0
+#define LED_STRIPLEN_ODD 1
 
 // variables
 static NEOPIXEL<LED_OUT_1> ch1;
@@ -35,24 +37,70 @@ static NEOPIXEL<LED_OUT_3> ch3;
 CRGBArray<NUM_LEDS> leds;
 int ledOrder[NUM_LEDS];
 int ledCount = 0;
-bool USBStatus;
 String output = "";
 
+/*************************
+ * MAIN/SETUP FUNCTIONS  *
+ *************************/
 void setup() {
 	Serial.begin(57600);
+	
+	// set up i/o pins
 	pinMode(USB_DETECT, INPUT);
 	pinMode(USB_LED, OUTPUT);
+	
+	// set up inturrupts for USB
 	enableInterrupt(USB_DETECT, usbChange, CHANGE);
+
+	// add the LED strips to FastLED
 	addLedStrip(&ch1, NUM_LEDS_PER_STRIP, LED_ORDER_RTOL);
 	addLedStrip(&ch2, NUM_LEDS_PER_STRIP, LED_ORDER_RTOL);
 	addLedStrip(&ch3, NUM_LEDS_PER_STRIP, LED_ORDER_LTOR);
+	
+	// probe usb status at boot
 	usbChange();
 }
+
+void loop() {    
+	Serial.println("loop!");
+	//rainbowFromMiddle();
+	//fillLtoR(CRGB::Purple);
+	rainbowSlideFromMiddle();
+}
+
+
+/*************************
+ *  GEOMETRY FUNCTIONS   *
+ *************************/
 
 // returns the "real world" X-position for an LED.
 int X(int x){
 	return ledOrder[x];
 }
+
+// overflow-safe X-position
+int Xsafe(int x){
+	if( x > NUM_LEDS ) return -1;
+	return ledOrder[x];
+}
+
+// returns LED_STRIPLEN_EVEN/LED_STRIPLEN_ODD (basically)
+int evenodd(){
+	return NUM_LEDS % 2;
+}
+
+// returns the ledOrder index number for the
+// middle LED. in the case of even (two 'middles')
+// it returns the left-most 'middle'
+int middle(){
+	if(evenodd() == LED_STRIPLEN_EVEN) return NUM_LEDS / 2 - 1;
+	return (NUM_LEDS + 1) / 2 - 1;
+}
+
+
+/*************************
+ * LED HELPER FUNCTIONS  *
+ *************************/
 
 // adds a strip of LEDS in a certain order
 void addLedStrip(CLEDController *channel, int num_leds, int order){
@@ -71,12 +119,10 @@ void addLedStrip(CLEDController *channel, int num_leds, int order){
 	ledCount += num_leds;
 }
 
-void loop() {    
-	Serial.println("loop!");
-	//rainbowFromMiddle();
-	//fillLtoR(CRGB::Purple);
-	rainbowSlideFromMiddle();
-}
+
+/*************************
+ *      ANIMATIONS       *
+ *************************/
 
 void fillLtoR(CRGB color){
 	FastLED.setBrightness(196);
@@ -93,17 +139,24 @@ void fillLtoR(CRGB color){
 
 void rainbowSlideFromMiddle(){
 	static uint8_t hue;
+	int mid = middle();
 	CRGB oldcolor_cur;
-	//first, store the old middle color and bump the value
-	CRGB oldcolor_next = leds[NUM_LEDS/2];
-	leds[NUM_LEDS/2] = CHSV(hue++, 255, 255);
-	for(int i = (NUM_LEDS/2)-1; i > 0; i--){
-		//now, 'slide' the old color down the strip in both directions
+	// first, store the old mid color and bump the value
+	CRGB oldcolor_next = leds[mid];
+	leds[mid] = CHSV(hue++, 255, 255);
+	if(evenodd() == LED_STRIPLEN_EVEN){
+		leds[mid+1] = leds[mid];
+	}
+	for(int i = mid-1; i >= 0; i--){
+		// now, 'slide' the old color down the strip in both directions
 		oldcolor_cur = leds[X(i)];
 		leds[X(i)] = oldcolor_next;
 		// and mirror it to the other side
-		int mirror = (NUM_LEDS/2)+(NUM_LEDS/2 - i);
-		leds[X(mirror)] = oldcolor_next;
+		int mirror = mid+(mid - i);
+		if(evenodd() == LED_STRIPLEN_EVEN){
+			mirror++;
+		}
+		leds[Xsafe(mirror)] = oldcolor_next;
 		oldcolor_next = oldcolor_cur;
 	}
 	FastLED.show();
@@ -153,20 +206,29 @@ void fadeToWhite(){
 	}
 }
 
+
+/*************************
+ *  USB/SLEEP FUNCTIONS  *
+ *************************/
+
+// probe USB status and do something accordingly
 void usbChange(){
 	if(digitalRead(USB_DETECT) == HIGH){
 		digitalWrite(USB_LED, HIGH);
-		USBStatus = true;
 		fadeToWhite();
 	} else {
 		digitalWrite(USB_LED, LOW);
-		USBStatus = false;
 		fadeToBlack();
-		// "sleep" while USB is unplugged
-		while(USBStatus == false){
-			delay(33);
-		}
+		sleepNow();
 	}
 }
 
-
+// sleep the MCU in the highest sleep mode
+void sleepNow(){
+	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+	sei();
+	sleep_enable();
+	sleep_cpu();
+	sleep_disable();
+	cli();
+}

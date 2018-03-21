@@ -19,10 +19,10 @@ echo -e "\n==========================================\n"
 
 if [[ "$RET" != "0" ]];then
 
-    echo "BUILD FAILED! Look above for why..."
+    echo -e "\e[31;1mBUILD FAILED! Look above for why...\e[0m"
     exit 1
 fi
 
-echo "Build successful."
+echo -e "\e[32;1mBuild successful.\e[0m"
 cp -f $WD/tmp/build/led_controller.ino.hex $WD/led_controller.ino.hex
 avr-size $WD/led_controller.ino.hex
