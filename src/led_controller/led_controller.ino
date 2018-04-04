@@ -1,8 +1,9 @@
 //vim: ts=4 sw=4 noexpandtab
-
+// includes
+#define EI_NOTEXTERNAL
 #define EI_NOTPORTC
 #define EI_NOTPORTD
-#include <EnableInterrupt.h>
+//#include <EnableInterrupt.h>
 #include <FastLED.h>
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
@@ -38,6 +39,8 @@ CRGBArray<NUM_LEDS> leds;
 int ledOrder[NUM_LEDS];
 int ledCount = 0;
 String output = "";
+volatile int intr = 0;
+int brightness = 0;
 
 /*************************
  * MAIN/SETUP FUNCTIONS  *
@@ -49,8 +52,12 @@ void setup() {
 	pinMode(USB_DETECT, INPUT);
 	pinMode(USB_LED, OUTPUT);
 	
-	// set up inturrupts for USB
-	enableInterrupt(USB_DETECT, usbChange, CHANGE);
+	// set up interrupts for USB
+	//enableInterrupt(USB_DETECT, usbChange, CHANGE);
+	cli();
+	PCICR |= 0b00000001;
+	PCMSK0 |= 0b00000010;
+	sei();
 
 	// add the LED strips to FastLED
 	addLedStrip(&ch1, NUM_LEDS_PER_STRIP, LED_ORDER_RTOL);
@@ -63,6 +70,7 @@ void setup() {
 
 void loop() {    
 	Serial.println("loop!");
+	if(intr) handleInterrupt();
 	//rainbowFromMiddle();
 	//fillLtoR(CRGB::Purple);
 	rainbowSlideFromMiddle();
@@ -127,6 +135,7 @@ void addLedStrip(CLEDController *channel, int num_leds, int order){
 void fillLtoR(CRGB color){
 	FastLED.setBrightness(196);
 	for(int i = 0; i < NUM_LEDS; i++){
+		if(intr) return;
 		String output = "Filling LED";
 		Serial.println(output + i + " at position " + X(i));
 		leds.fadeToBlackBy(3);
@@ -148,6 +157,7 @@ void rainbowSlideFromMiddle(){
 		leds[mid+1] = leds[mid];
 	}
 	for(int i = mid-1; i >= 0; i--){
+		if(intr) return;
 		// now, 'slide' the old color down the strip in both directions
 		oldcolor_cur = leds[X(i)];
 		leds[X(i)] = oldcolor_next;
@@ -166,6 +176,7 @@ void rainbowSlideFromMiddle(){
 void rainbowFromMiddle() {
 	static uint8_t hue;
 	for(int i = NUM_LEDS/2; i > 0; i--){
+		if(intr) return;
 		rainbowPulseStep(i, hue);
 	}
 }
@@ -173,6 +184,7 @@ void rainbowFromMiddle() {
 void rainbowFromEnds() {
 	static uint8_t hue;
 	for(int i = 0; i < NUM_LEDS/2; i++){
+		if(intr) return;
 		rainbowPulseStep(i, hue);
 	}
 }
@@ -187,11 +199,14 @@ void rainbowPulseStep(int i, uint8_t &hue){
 }
 
 void fadeToBlack(){
-	for(int i = 31; i < 255; i += 8){
-		leds.fadeToBlackBy(i);
+	for(; brightness >0; brightness--){
+		if(intr) return;
+		FastLED.setBrightness(brightness);
 		FastLED.show();
-		delay(66);
+		delay(33);
 	}
+	FastLED.setBrightness(0);
+	FastLED.show();
 }
 
 void fadeToWhite(){
@@ -199,8 +214,9 @@ void fadeToWhite(){
 		leds[i] = CRGB::White;
 	}
 
-	for(int i = 1; i < 196; i++){
-		FastLED.setBrightness(i);
+	for(; brightness < 196; brightness++){
+		if(intr) return;
+		FastLED.setBrightness(brightness);
 		FastLED.show();
 		delay(33);
 	}
@@ -210,6 +226,25 @@ void fadeToWhite(){
 /*************************
  *  USB/SLEEP FUNCTIONS  *
  *************************/
+
+// pinchange interrupt for USB
+ISR(PCINT0_vect){
+	cli();
+	intr = 1;
+	delay(150);
+	sei();
+}
+
+// handle interrupts
+void handleInterrupt(){
+	int currIntr = intr;
+	intr = 0;
+	switch(currIntr){
+		case 1: // USB change interrupt
+			usbChange();
+			break;
+	}
+}
 
 // probe USB status and do something accordingly
 void usbChange(){
@@ -226,9 +261,9 @@ void usbChange(){
 // sleep the MCU in the highest sleep mode
 void sleepNow(){
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-	sei();
+	//sei();
 	sleep_enable();
 	sleep_cpu();
 	sleep_disable();
-	cli();
+	//cli();
 }
