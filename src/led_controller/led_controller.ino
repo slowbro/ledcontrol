@@ -1,24 +1,20 @@
 //vim: ts=4 sw=4 noexpandtab
-// includes
-#define EI_NOTEXTERNAL
-#define EI_NOTPORTC
-#define EI_NOTPORTD
-//#include <EnableInterrupt.h>
 #include <FastLED.h>
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
 
-// io
-#define USB_DETECT 9  // atmega pin 15
-#define USB_LED   12  // atmega pin 18 (MISO)
+// io (rev 1.0 board)
+#define USB_DETECT 5  // atmega pin 11
+#define USB_LED    6  // atmega pin 12
 #define LED_OUT_1 A2  // atmega pin 25
 #define LED_OUT_2 A1  // atmega pin 24
 #define LED_OUT_3 A0  // atmega pin 23
 
 // SPI pins 
+#define CSEL 10 // atmega 16 (flash csel)
 #define MOSI 11 // atmega 17
 #define MISO 12 // atmega 18
-#define SCK 13  // atmega 19
+#define SCK  13 // atmega 19
 
 // LED specific
 #define NUM_STRIPS 3
@@ -42,21 +38,33 @@ String output = "";
 volatile int intr = 0;
 int brightness = 0;
 
+//serial related
+String serialString = "";
+boolean serialComplete = false;
+enum serialAction {
+	sLock,
+	sUnlock,
+	sNotification,
+	sUnknown
+};
+
 /*************************
  * MAIN/SETUP FUNCTIONS  *
  *************************/
 void setup() {
 	Serial.begin(57600);
+	Serial.println("Initializing...");
+	serialString.reserve(512);
 	
 	// set up i/o pins
 	pinMode(USB_DETECT, INPUT);
 	pinMode(USB_LED, OUTPUT);
+	pinMode(CSEL, OUTPUT);
 	
 	// set up interrupts for USB
-	//enableInterrupt(USB_DETECT, usbChange, CHANGE);
 	cli();
-	PCICR |= 0b00000001;
-	PCMSK0 |= 0b00000010;
+	PCICR  |= 0b00000100;
+	PCMSK2 |= 0b00100000;
 	sei();
 
 	// add the LED strips to FastLED
@@ -66,10 +74,17 @@ void setup() {
 	
 	// probe usb status at boot
 	usbChange();
+
+	Serial.println("Initialized.");
 }
 
 void loop() {    
-	Serial.println("loop!");
+	//Serial.println("loop!");
+	if(serialComplete){
+		handleSerial(serialString);
+		serialString = "";
+		serialComplete = false;
+	}
 	if(intr) handleInterrupt();
 	//rainbowFromMiddle();
 	//fillLtoR(CRGB::Purple);
@@ -210,6 +225,7 @@ void fadeToBlack(){
 }
 
 void fadeToWhite(){
+	Serial.println("Fading in...");
 	for(int i = 0; i < NUM_LEDS; i++){
 		leds[i] = CRGB::White;
 	}
@@ -220,6 +236,7 @@ void fadeToWhite(){
 		FastLED.show();
 		delay(33);
 	}
+	Serial.println("Fade complete.");
 }
 
 
@@ -228,7 +245,7 @@ void fadeToWhite(){
  *************************/
 
 // pinchange interrupt for USB
-ISR(PCINT0_vect){
+ISR(PCINT2_vect){
 	cli();
 	intr = 1;
 	delay(150);
@@ -261,9 +278,47 @@ void usbChange(){
 // sleep the MCU in the highest sleep mode
 void sleepNow(){
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-	//sei();
 	sleep_enable();
 	sleep_cpu();
 	sleep_disable();
-	//cli();
+}
+
+
+/*************************
+ *   SERIAL FUNCTIONS    *
+ *************************/
+
+// handle received byte
+void serialEvent(){
+	while(Serial.available()){
+		char inChar = (char)Serial.read();
+		if(inChar == '\n' || inChar == '\r'){
+			serialComplete = true;
+			return;
+		}
+		serialString += inChar;
+	}
+}
+
+// translate an input string to the appropriate command-enum
+serialAction serialTranslate(String input){
+	if(input == "lock") return sLock;
+	if(input == "unlock") return sUnlock;
+	return sUnknown;
+}
+
+// handle the command
+void handleSerial(String input){
+	switch(serialTranslate(input)){
+		case sLock:
+			Serial.println("Got lock command");
+			break;
+		case sUnlock:
+			Serial.println("Got unlock command");
+			break;
+		case sUnknown:
+		default:
+			Serial.println("Invalid command: "+input);
+			break;
+	}
 }
