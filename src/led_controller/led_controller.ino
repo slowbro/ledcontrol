@@ -31,7 +31,7 @@
 static NEOPIXEL<LED_OUT_1> ch1;
 static NEOPIXEL<LED_OUT_2> ch2;
 static NEOPIXEL<LED_OUT_3> ch3;
-CRGBArray<NUM_LEDS> leds;
+CRGB leds[NUM_LEDS];
 int ledOrder[NUM_LEDS];
 int ledCount = 0;
 String output = "";
@@ -63,8 +63,8 @@ void setup() {
 	
 	// set up interrupts for USB
 	cli();
-	PCICR  |= 0b00000100;
-	PCMSK2 |= 0b00100000;
+	PCICR  |= 0b00000100; // enable port d
+	PCMSK2 |= 0b00100000; // enable PCICT21
 	sei();
 
 	// add the LED strips to FastLED
@@ -86,9 +86,9 @@ void loop() {
 		serialComplete = false;
 	}
 	if(intr) handleInterrupt();
-	//rainbowFromMiddle();
-	//fillLtoR(CRGB::Purple);
-	rainbowSlideFromMiddle();
+	//animRainbowFromMiddle();
+	//animFillLtoR(CRGB::Purple);
+	animRainbowSlideFromMiddle();
 }
 
 
@@ -147,13 +147,36 @@ void addLedStrip(CLEDController *channel, int num_leds, int order){
  *      ANIMATIONS       *
  *************************/
 
-void fillLtoR(CRGB color){
+// animation to play when there is a notification
+// this needs work tbh - it's kind of jarring
+void animNotification(){
+	// save the current state
+	CRGB state[NUM_LEDS];
+	memcpy8(state, leds, sizeof(leds));
+	FastLED.setBrightness(96);
+	// empty the LED array ("set to black")
+	memset(leds, 0, NUM_LEDS*3);
+	FastLED.show();
+	for(int i=0;i<NUM_LEDS/2;i++){
+		leds[X(i)] = CRGB::Red;
+		leds[X(NUM_LEDS-i)] = CRGB::Red;
+		FastLED.delay(33);
+	}
+	delay(500);
+	FastLED.setBrightness(brightness);
+	memcpy8(leds, state, sizeof(state));
+	FastLED.show();
+}
+
+void animFillLtoR(CRGB color){
 	FastLED.setBrightness(196);
 	for(int i = 0; i < NUM_LEDS; i++){
 		if(intr) return;
 		String output = "Filling LED";
 		Serial.println(output + i + " at position " + X(i));
-		leds.fadeToBlackBy(3);
+		for(int i=0;i<NUM_LEDS;i++){
+			leds[i].fadeToBlackBy(3);
+		}
 		leds[X(i)] = color;
 		FastLED.show();
 		delay(66);
@@ -161,7 +184,8 @@ void fillLtoR(CRGB color){
 	FastLED.show();
 }
 
-void rainbowSlideFromMiddle(){
+// basically the default animation right now
+void animRainbowSlideFromMiddle(){
 	static uint8_t hue;
 	int mid = middle();
 	CRGB oldcolor_cur;
@@ -188,32 +212,7 @@ void rainbowSlideFromMiddle(){
 	delay(66);
 }
 
-void rainbowFromMiddle() {
-	static uint8_t hue;
-	for(int i = NUM_LEDS/2; i > 0; i--){
-		if(intr) return;
-		rainbowPulseStep(i, hue);
-	}
-}
-
-void rainbowFromEnds() {
-	static uint8_t hue;
-	for(int i = 0; i < NUM_LEDS/2; i++){
-		if(intr) return;
-		rainbowPulseStep(i, hue);
-	}
-}
-
-void rainbowPulseStep(int i, uint8_t &hue){
-	leds.fadeToBlackBy(5);
-	leds[X(i)] = CHSV(hue++, 255, 255);
-	leds(NUM_LEDS/2,NUM_LEDS-1) = leds(NUM_LEDS/2 - 1, 0);
-	FastLED.show();
-	delay(66);
-
-}
-
-void fadeToBlack(){
+void animFadeToBlack(){
 	for(; brightness >0; brightness--){
 		if(intr) return;
 		FastLED.setBrightness(brightness);
@@ -224,7 +223,7 @@ void fadeToBlack(){
 	FastLED.show();
 }
 
-void fadeToWhite(){
+void animFadeToWhite(){
 	Serial.println("Fading in...");
 	for(int i = 0; i < NUM_LEDS; i++){
 		leds[i] = CRGB::White;
@@ -267,10 +266,10 @@ void handleInterrupt(){
 void usbChange(){
 	if(digitalRead(USB_DETECT) == HIGH){
 		digitalWrite(USB_LED, HIGH);
-		fadeToWhite();
+		animFadeToWhite();
 	} else {
 		digitalWrite(USB_LED, LOW);
-		fadeToBlack();
+		animFadeToBlack();
 		sleepNow();
 	}
 }
@@ -294,6 +293,8 @@ void serialEvent(){
 		char inChar = (char)Serial.read();
 		if(inChar == '\n' || inChar == '\r'){
 			serialComplete = true;
+			continue;
+		} else if(serialComplete) {
 			return;
 		}
 		serialString += inChar;
@@ -304,6 +305,7 @@ void serialEvent(){
 serialAction serialTranslate(String input){
 	if(input == "lock") return sLock;
 	if(input == "unlock") return sUnlock;
+	if(input == "notification") return sNotification;
 	return sUnknown;
 }
 
@@ -315,6 +317,10 @@ void handleSerial(String input){
 			break;
 		case sUnlock:
 			Serial.println("Got unlock command");
+			break;
+		case sNotification:
+			Serial.println("Notify!");
+			animNotification();
 			break;
 		case sUnknown:
 		default:
