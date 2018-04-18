@@ -38,7 +38,15 @@ String output = "";
 volatile int intr = 0;
 int brightness = 0;
 
-//serial related
+// animation switching
+void (*currentAnimation)();
+void (*nextAnimation)();
+CEveryNMilliseconds changeTimer(500);
+bool timerReady = false;
+bool waitForAnimationComplete = true;
+unsigned int animationStep = 0;
+
+// serial related
 String serialString = "";
 boolean serialComplete = false;
 enum serialAction {
@@ -75,20 +83,32 @@ void setup() {
 	// probe usb status at boot
 	usbChange();
 
+	currentAnimation = &animRainbowSlideFromMiddle;
+
 	Serial.println("Initialized.");
 }
 
 void loop() {    
-	//Serial.println("loop!");
+	// process incoming commands
 	if(serialComplete){
 		handleSerial(serialString);
 		serialString = "";
 		serialComplete = false;
 	}
+
+	// process interrupts
 	if(intr) handleInterrupt();
-	//animRainbowFromMiddle();
-	//animFillLtoR(CRGB::Purple);
-	animRainbowSlideFromMiddle();
+
+	// process animation changes
+	EVERY_N_MILLISECONDS(33){
+		if(timerReady && changeTimer){
+			currentAnimation = nextAnimation;
+			timerReady = false;
+		}
+	}
+
+	// run the current animation
+	(*currentAnimation)();
 }
 
 
@@ -140,6 +160,13 @@ void addLedStrip(CLEDController *channel, int num_leds, int order){
 	}
 
 	ledCount += num_leds;
+}
+
+void setNextAnimation(void (*nextAnim)(), uint32_t delayTime){
+	changeTimer.setPeriod(delayTime);
+	nextAnimation = nextAnim;
+	timerReady = true;
+	changeTimer.reset();
 }
 
 
@@ -320,7 +347,8 @@ void handleSerial(String input){
 			break;
 		case sNotification:
 			Serial.println("Notify!");
-			animNotification();
+			setNextAnimation(currentAnimation, 500);
+			currentAnimation = &animNotification;
 			break;
 		case sUnknown:
 		default:
