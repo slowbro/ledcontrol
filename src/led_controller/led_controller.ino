@@ -45,6 +45,7 @@ CEveryNMilliseconds changeTimer(500);
 bool timerReady = false;
 bool waitForAnimationComplete = true;
 unsigned int animationStep = 0;
+CEveryNMilliseconds animationTimer(33);
 
 // serial related
 String serialString = "";
@@ -53,6 +54,7 @@ enum serialAction {
 	sLock,
 	sUnlock,
 	sNotification,
+	sStatus,
 	sUnknown
 };
 
@@ -108,7 +110,12 @@ void loop() {
 	}
 
 	// run the current animation
-	(*currentAnimation)();
+	EVERY_N_MILLISECONDS(10){
+		if(animationTimer){
+			animationTimer.reset();
+			(*currentAnimation)();
+		}
+	}
 }
 
 
@@ -162,6 +169,11 @@ void addLedStrip(CLEDController *channel, int num_leds, int order){
 	ledCount += num_leds;
 }
 
+/*************************
+ *   ANIMATION HELPERS   *
+ *************************/
+
+// set the next animation, to be cut to after delayTime millis
 void setNextAnimation(void (*nextAnim)(), uint32_t delayTime){
 	changeTimer.setPeriod(delayTime);
 	nextAnimation = nextAnim;
@@ -180,18 +192,20 @@ void animNotification(){
 	// save the current state
 	CRGB state[NUM_LEDS];
 	memcpy8(state, leds, sizeof(leds));
-	FastLED.setBrightness(96);
 	// empty the LED array ("set to black")
 	memset(leds, 0, NUM_LEDS*3);
+	FastLED.setBrightness(96);
 	FastLED.show();
 	for(int i=0;i<NUM_LEDS/2;i++){
+		if(intr) return;
 		leds[X(i)] = CRGB::Red;
 		leds[X(NUM_LEDS-i)] = CRGB::Red;
-		FastLED.delay(33);
+		FastLED.delay(16);
 	}
 	delay(500);
-	FastLED.setBrightness(brightness);
+	// return to the saved state
 	memcpy8(leds, state, sizeof(state));
+	FastLED.setBrightness(brightness);
 	FastLED.show();
 }
 
@@ -213,6 +227,7 @@ void animFillLtoR(CRGB color){
 
 // basically the default animation right now
 void animRainbowSlideFromMiddle(){
+	animationTimer.setPeriod(66);
 	static uint8_t hue;
 	int mid = middle();
 	CRGB oldcolor_cur;
@@ -236,7 +251,6 @@ void animRainbowSlideFromMiddle(){
 		oldcolor_next = oldcolor_cur;
 	}
 	FastLED.show();
-	delay(66);
 }
 
 void animFadeToBlack(){
@@ -333,6 +347,7 @@ serialAction serialTranslate(String input){
 	if(input == "lock") return sLock;
 	if(input == "unlock") return sUnlock;
 	if(input == "notification") return sNotification;
+	if(input == "status") return sStatus;
 	return sUnknown;
 }
 
@@ -349,6 +364,10 @@ void handleSerial(String input){
 			Serial.println("Notify!");
 			setNextAnimation(currentAnimation, 500);
 			currentAnimation = &animNotification;
+			break;
+		case sStatus:
+			Serial.println("Current status:");
+			Serial.println(output+FastLED.getFPS()+" FPS");
 			break;
 		case sUnknown:
 		default:
