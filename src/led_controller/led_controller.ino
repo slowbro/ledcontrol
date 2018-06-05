@@ -55,6 +55,9 @@ enum serialAction {
 	sUnlock,
 	sNotification,
 	sStatus,
+	sBrightness,
+	sWhite,
+	sRainbow,
 	sUnknown
 };
 
@@ -187,26 +190,36 @@ void setNextAnimation(void (*nextAnim)(), uint32_t delayTime){
  *************************/
 
 // animation to play when there is a notification
-// this needs work tbh - it's kind of jarring
 void animNotification(){
 	// save the current state
 	CRGB state[NUM_LEDS];
 	memcpy8(state, leds, sizeof(leds));
 	// empty the LED array ("set to black")
-	memset(leds, 0, NUM_LEDS*3);
+	//memset(leds, 0, NUM_LEDS*3);
 	FastLED.setBrightness(96);
 	FastLED.show();
 	for(int i=0;i<NUM_LEDS/2;i++){
 		if(intr) return;
+		fadeToBlackBy(leds, NUM_LEDS, 8);
 		leds[X(i)] = CRGB::Red;
-		leds[X(NUM_LEDS-i)] = CRGB::Red;
+		leds[X((NUM_LEDS-1)-i)] = CRGB::Red;
 		FastLED.delay(16);
 	}
-	delay(500);
+	// reverse runner
+	for(int o=NUM_LEDS/2;o>0;o--){
+		if(intr) return;
+		fadeToBlackBy(leds, NUM_LEDS, 8);
+		leds[X(o-1)] = CRGB::Red;
+		leds[X((NUM_LEDS-1)-(o-1))] = CRGB::Red;
+		FastLED.delay(16);
+	}
 	// return to the saved state
 	memcpy8(leds, state, sizeof(state));
-	FastLED.setBrightness(brightness);
-	FastLED.show();
+	// fade in quickly
+	for(int i=16;i<brightness;i++){
+		FastLED.setBrightness(i);
+		FastLED.delay(8);
+	}
 }
 
 void animFillLtoR(CRGB color){
@@ -266,9 +279,7 @@ void animFadeToBlack(){
 
 void animFadeToWhite(){
 	Serial.println("Fading in...");
-	for(int i = 0; i < NUM_LEDS; i++){
-		leds[i] = CRGB::White;
-	}
+	fill_solid(leds, NUM_LEDS, CRGB::White);
 
 	for(; brightness < 196; brightness++){
 		if(intr) return;
@@ -279,6 +290,11 @@ void animFadeToWhite(){
 	Serial.println("Fade complete.");
 }
 
+// this should become 'animSolidColor(CRGB)' when i get around to extending currentAnimation
+void animSolidWhite(){
+	fill_solid(leds, NUM_LEDS, CRGB::White);
+	FastLED.show();
+}
 
 /*************************
  *  USB/SLEEP FUNCTIONS  *
@@ -348,6 +364,9 @@ serialAction serialTranslate(String input){
 	if(input == "unlock") return sUnlock;
 	if(input == "notification") return sNotification;
 	if(input == "status") return sStatus;
+	if(input == "brightness") return sBrightness;
+	if(input == "white") return sWhite;
+	if(input == "rainbow") return sRainbow;
 	return sUnknown;
 }
 
@@ -368,6 +387,15 @@ void handleSerial(String input){
 		case sStatus:
 			Serial.println("Current status:");
 			Serial.println(output+FastLED.getFPS()+" FPS");
+			break;
+		case sBrightness:
+			Serial.println(output+"Brightness: "+brightness);
+			break;
+		case sWhite:
+			setNextAnimation(animSolidWhite, 1);
+			break;
+		case sRainbow:
+			setNextAnimation(animRainbowSlideFromMiddle, 1);
 			break;
 		case sUnknown:
 		default:
