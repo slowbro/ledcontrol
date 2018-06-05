@@ -121,6 +121,7 @@ void loop() {
 		if(animationTimer){
 			animationTimer.reset();
 			(*currentAnimation)();
+			FastLED.show();
 		}
 	}
 }
@@ -199,7 +200,6 @@ void animTwinkle(){
 		leds[random16(NUM_LEDS)] = CRGB::White;
 	}
 	fadeToBlackBy(leds, NUM_LEDS, 32);
-	FastLED.show();
 }
 
 // animation to play when there is a notification
@@ -248,7 +248,6 @@ void animFillLtoR(CRGB color){
 		FastLED.show();
 		delay(66);
 	}
-	FastLED.show();
 }
 
 // basically the default animation right now
@@ -276,7 +275,6 @@ void animRainbowSlideFromMiddle(){
 		leds[Xsafe(mirror)] = oldcolor_next;
 		oldcolor_next = oldcolor_cur;
 	}
-	FastLED.show();
 }
 
 void animFadeToBlack(){
@@ -287,7 +285,6 @@ void animFadeToBlack(){
 		delay(33);
 	}
 	FastLED.setBrightness(0);
-	FastLED.show();
 }
 
 void animFadeToWhite(){
@@ -306,7 +303,6 @@ void animFadeToWhite(){
 // this should become 'animSolidColor(CRGB)' when i get around to extending currentAnimation
 void animSolidWhite(){
 	fill_solid(leds, NUM_LEDS, CRGB::White);
-	FastLED.show();
 }
 
 /*************************
