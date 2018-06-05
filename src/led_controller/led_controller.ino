@@ -37,8 +37,10 @@ int ledCount = 0;
 String output = "";
 volatile int intr = 0;
 int brightness = 0;
+bool suppressNotification = false;
 
 // animation switching
+void (*previousAnimation)();
 void (*currentAnimation)();
 void (*nextAnimation)();
 CEveryNMilliseconds changeTimer(500);
@@ -88,7 +90,8 @@ void setup() {
 	// probe usb status at boot
 	usbChange();
 
-	currentAnimation = &animRainbowSlideFromMiddle;
+	currentAnimation  = &animRainbowSlideFromMiddle;
+	previousAnimation = &animRainbowSlideFromMiddle;
 
 	Serial.println("Initialized.");
 }
@@ -107,7 +110,8 @@ void loop() {
 	// process animation changes
 	EVERY_N_MILLISECONDS(33){
 		if(timerReady && changeTimer){
-			currentAnimation = nextAnimation;
+			previousAnimation = currentAnimation;
+			currentAnimation  = nextAnimation;
 			timerReady = false;
 		}
 	}
@@ -188,6 +192,15 @@ void setNextAnimation(void (*nextAnim)(), uint32_t delayTime){
 /*************************
  *      ANIMATIONS       *
  *************************/
+
+// twinkling lights
+void animTwinkle(){
+	if (random8() < 64){
+		leds[random16(NUM_LEDS)] = CRGB::White;
+	}
+	fadeToBlackBy(leds, NUM_LEDS, 32);
+	FastLED.show();
+}
 
 // animation to play when there is a notification
 void animNotification(){
@@ -375,14 +388,20 @@ void handleSerial(String input){
 	switch(serialTranslate(input)){
 		case sLock:
 			Serial.println("Got lock command");
+			suppressNotification = true;
+			setNextAnimation(animTwinkle, 200);
 			break;
 		case sUnlock:
 			Serial.println("Got unlock command");
+			suppressNotification = false;
+			setNextAnimation(previousAnimation, 200);
 			break;
 		case sNotification:
 			Serial.println("Notify!");
-			setNextAnimation(currentAnimation, 500);
-			currentAnimation = &animNotification;
+			if(!suppressNotification){
+				setNextAnimation(currentAnimation, 500);
+				currentAnimation = &animNotification;
+			}
 			break;
 		case sStatus:
 			Serial.println("Current status:");
