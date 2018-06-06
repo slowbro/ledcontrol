@@ -37,7 +37,7 @@ int ledCount = 0;
 String output = "";
 volatile int intr = 0;
 int brightness = 0;
-bool suppressNotification = false;
+bool locked = false;
 
 // animation switching
 void (*previousAnimation)();
@@ -336,6 +336,12 @@ void usbChange(){
 	} else {
 		digitalWrite(USB_LED, LOW);
 		animFadeToBlack();
+		// reset the animation if locked
+		// so we don't resume the 'locked' animation when re-docking
+		if(locked){
+			locked = false;
+			currentAnimation = previousAnimation;
+		}
 		sleepNow();
 	}
 }
@@ -384,17 +390,17 @@ void handleSerial(String input){
 	switch(serialTranslate(input)){
 		case sLock:
 			Serial.println("Got lock command");
-			suppressNotification = true;
+			locked = true;
 			setNextAnimation(animTwinkle, 200);
 			break;
 		case sUnlock:
 			Serial.println("Got unlock command");
-			suppressNotification = false;
+			locked = false;
 			setNextAnimation(previousAnimation, 200);
 			break;
 		case sNotification:
 			Serial.println("Notify!");
-			if(!suppressNotification){
+			if(!locked){
 				setNextAnimation(currentAnimation, 500);
 				currentAnimation = &animNotification;
 			}
