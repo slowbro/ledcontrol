@@ -79,7 +79,7 @@ void setup() {
 	// set up interrupts for USB
 	cli();
 	PCICR  |= 0b00000100; // enable port d
-	PCMSK2 |= 0b00100000; // enable PCICT21
+	PCMSK2 |= 0b00100000; // enable PCICR21
 	sei();
 
 	// add the LED strips to FastLED
@@ -90,6 +90,7 @@ void setup() {
 	// probe usb status at boot
 	usbChange();
 
+	// setup initial animation
 	currentAnimation  = &animRainbowSlideFromMiddle;
 	previousAnimation = &animRainbowSlideFromMiddle;
 
@@ -138,7 +139,8 @@ int X(int x){
 
 // overflow-safe X-position
 int Xsafe(int x){
-	if( x > NUM_LEDS ) return -1;
+	if( x > NUM_LEDS ) return NUM_LEDS;
+	if( x < 0 ) return 0;
 	return ledOrder[x];
 }
 
@@ -400,7 +402,7 @@ void handleSerial(String input){
 			break;
 		case sNotification:
 			Serial.println("Notify!");
-			if(!locked){
+			if(!locked && currentAnimation != animNotification){
 				setNextAnimation(currentAnimation, 500);
 				currentAnimation = &animNotification;
 			}
