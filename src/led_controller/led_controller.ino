@@ -287,6 +287,7 @@ void animFadeToBlack(){
 		delay(33);
 	}
 	FastLED.setBrightness(0);
+	FastLED.show();
 }
 
 void animFadeToWhite(){
