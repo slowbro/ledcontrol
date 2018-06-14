@@ -398,6 +398,7 @@ void handleSerial(String input){
 			break;
 		case sUnlock:
 			Serial.println("Got unlock command");
+			if(!locked) break;
 			locked = false;
 			setNextAnimation(previousAnimation, 200);
 			break;
