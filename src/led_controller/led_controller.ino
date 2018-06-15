@@ -50,7 +50,7 @@ unsigned int animationStep = 0;
 CEveryNMilliseconds animationTimer(33);
 
 // serial related
-String serialString = "";
+char serialBuffer[255];
 boolean serialComplete = false;
 enum serialAction {
 	sLock,
@@ -69,7 +69,6 @@ enum serialAction {
 void setup() {
 	Serial.begin(57600);
 	Serial.println("Initializing...");
-	serialString.reserve(512);
 	
 	// set up i/o pins
 	pinMode(USB_DETECT, INPUT);
@@ -100,8 +99,8 @@ void setup() {
 void loop() {    
 	// process incoming commands
 	if(serialComplete){
-		handleSerial(serialString);
-		serialString = "";
+		handleSerial(serialBuffer);
+		memset(serialBuffer, 0, sizeof(serialBuffer));
 		serialComplete = false;
 	}
 
@@ -122,6 +121,7 @@ void loop() {
 		if(animationTimer){
 			animationTimer.reset();
 			(*currentAnimation)();
+			FastLED.setBrightness(brightness);
 			FastLED.show();
 		}
 	}
@@ -211,7 +211,7 @@ void animNotification(){
 	memcpy8(state, leds, sizeof(leds));
 	// empty the LED array ("set to black")
 	//memset(leds, 0, NUM_LEDS*3);
-	FastLED.setBrightness(96);
+	FastLED.setBrightness(brightness/2);
 	FastLED.show();
 	for(int i=0;i<NUM_LEDS/2;i++){
 		if(intr) return;
@@ -231,7 +231,7 @@ void animNotification(){
 	// return to the saved state
 	memcpy8(leds, state, sizeof(state));
 	// fade in quickly
-	for(int i=16;i<brightness;i++){
+	for(int i=brightness/4;i<brightness;i++){
 		FastLED.setBrightness(i);
 		FastLED.delay(8);
 	}
@@ -372,25 +372,39 @@ void serialEvent(){
 		} else if(serialComplete) {
 			return;
 		}
-		serialString += inChar;
+		serialBuffer[strlen(serialBuffer)] = inChar;
 	}
 }
 
 // translate an input string to the appropriate command-enum
-serialAction serialTranslate(String input){
-	if(input == "lock") return sLock;
-	if(input == "unlock") return sUnlock;
-	if(input == "notification") return sNotification;
-	if(input == "status") return sStatus;
-	if(input == "brightness") return sBrightness;
-	if(input == "white") return sWhite;
-	if(input == "rainbow") return sRainbow;
+serialAction serialTranslate(char *input){
+	if(strcmp(input, "lock")==0) return sLock;
+	if(strcmp(input, "unlock")==0) return sUnlock;
+	if(strcmp(input, "notification")==0) return sNotification;
+	if(strcmp(input, "status")==0) return sStatus;
+	if(strcmp(input, "brightness")==0) return sBrightness;
+	if(strcmp(input, "white")==0) return sWhite;
+	if(strcmp(input, "rainbow")==0) return sRainbow;
 	return sUnknown;
 }
 
 // handle the command
-void handleSerial(String input){
-	switch(serialTranslate(input)){
+void handleSerial(char *input){
+	// split the input
+	char **parts = NULL;
+	char *split  = strtok(input, " ");
+	int nsplit   = 0;
+
+	while(split){
+		parts = (char**)realloc(parts, sizeof(char*) * ++nsplit);
+		if(parts == NULL)
+			exit(-1);
+		parts[nsplit - 1] = split;
+		split = strtok(NULL, " ");
+	}
+
+	// do the thing
+	switch(serialTranslate(parts[0])){
 		case sLock:
 			Serial.println("Got lock command");
 			locked = true;
@@ -414,7 +428,17 @@ void handleSerial(String input){
 			Serial.println(output+FastLED.getFPS()+" FPS");
 			break;
 		case sBrightness:
-			Serial.println(output+"Brightness: "+brightness);
+			if(nsplit > 1){
+				int newbright = atoi(parts[1]);
+				if(!isNumeric(parts[1]) || newbright < 0 || newbright > 255){
+					Serial.println(output+"Invalid brightness '"+parts[1]+"': must be 0-255");
+				} else {
+					Serial.println(output+"Setting brightness to "+parts[1]);
+					brightness = newbright;
+				}
+			} else {
+				Serial.println(output+"Brightness: "+brightness);
+			}
 			break;
 		case sWhite:
 			setNextAnimation(animSolidWhite, 1);
@@ -424,7 +448,20 @@ void handleSerial(String input){
 			break;
 		case sUnknown:
 		default:
-			Serial.println("Invalid command: "+input);
+			Serial.println(output+"Invalid command: '"+parts[0]+"'");
 			break;
 	}
+	free(parts);
+}
+
+
+/*************************
+ *   HELPER FUNCTIONS    *
+ *************************/
+
+bool isNumeric(char *in){
+	for(unsigned int i=0;i<strlen(in);i++){
+		if(!isDigit(in[i])) return false;
+	}
+	return true;
 }

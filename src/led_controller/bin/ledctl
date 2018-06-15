@@ -1,3 +1,3 @@
 #!/bin/bash
 stty -F /dev/ttyACM0 57600 raw -echo -echoe -echok -echoctl -echoke
-echo -en "\n$1\n" > /dev/ttyACM0
+echo -en "$*\n" > /dev/ttyACM0
