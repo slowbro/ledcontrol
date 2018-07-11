@@ -346,6 +346,7 @@ void usbChange(){
 			currentAnimation = previousAnimation;
 		}
 		sleepNow();
+		memset(serialBuffer, 0, sizeof(serialBuffer));
 	}
 }
 
